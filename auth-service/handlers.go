@@ -18,21 +18,38 @@ func NewAuthHandler(config Config, db *sql.DB) *AuthHandler {
 }
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
 
+	var req RegisterRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	if !IsValidCredentials(req.Username, req.Password) {
+		http.Error(w, "Invalid username or password", http.StatusBadRequest)
+		return
+	}
+
+	//проверяем существует ли пользователь в бд
+	query := `SELECT COUNT(*) FROM users WHERE username = $1`
+	var n int = 0
+	err = h.DB.QueryRow(query, req.Username).Scan(&n)
+	if err != nil {
+		http.Error(w, "Failed to register user", http.StatusInternalServerError)
+		return
+	}
+
+	if n != 0 {
+		http.Error(w, "A user with this username already exists", http.StatusConflict)
+		return
+	}
+	// окончание проверки
+
 	hashedPassword, err := HashPassword(req.Password)
 
 	var userID int64
-	query := `
+	query = `
     INSERT INTO users (username, password, role)
     VALUES ($1, $2, 'user')
     RETURNING id
@@ -50,16 +67,15 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := AuthResponse{Token: token}
+	resp := RegisterResponse{Token: token}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var req AuthRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -84,7 +100,8 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = ComparePassword(user.Password, req.Password)
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+
 	if err != nil {
 		if err == bcrypt.ErrMismatchedHashAndPassword {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
@@ -102,26 +119,15 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := AuthResponse{Token: token}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	err = enc.Encode(resp)
-
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Failed to encode", http.StatusInternalServerError)
 		return
 	}
 }
 
 func (h *AuthHandler) ValidateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
-	var req struct {
-		Token string `json:"token"`
-	}
-
+	var req ValidateRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -145,20 +151,14 @@ func (h *AuthHandler) ValidateHandler(w http.ResponseWriter, r *http.Request) {
 		Role:     role,
 		Valid:    true,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(resp)
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Failed to encode", http.StatusInternalServerError)
 		return
 	}
 }
 
 func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	var req UpdateRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -167,7 +167,27 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _, _, err := VerifyToken(req.Token, h.Config.SecretKey)
+	if !IsValidCredentials(req.Username, req.Password) {
+		http.Error(w, "Invalid sername or password", http.StatusBadRequest)
+		return
+	}
+
+	//проверяем существует ли пользователь c таким же username в бд
+	query := `SELECT COUNT(*) FROM users WHERE username = $1`
+	var n int = 0
+	err = h.DB.QueryRow(query, req.Username).Scan(&n)
+	if err != nil {
+		http.Error(w, "Failed to register user", http.StatusInternalServerError)
+		return
+	}
+
+	if n != 0 {
+		http.Error(w, "A user with this username already exists", http.StatusConflict)
+		return
+	}
+	// окончание проверки
+
+	userID, _, role, err := VerifyToken(req.Token, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
@@ -179,7 +199,7 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `
+	query = `
     UPDATE users 
     SET username = $1, password = $2 
     WHERE id = $3
@@ -190,13 +210,16 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newToken, err := GenerateToken(userID, req.Username, "user", h.Config.SecretKey)
+	newToken, err := GenerateToken(userID, req.Username, role, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
-	resp := AuthResponse{Token: newToken}
+	resp := UpdateResponse{Token: newToken}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode", http.StatusInternalServerError)
+		return
+	}
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -22,15 +24,17 @@ func main() {
 	}
 	defer db.Close()
 
-	err = db.Ping()
-	if err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
-	}
+	//проверка соединения с бд
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	fmt.Println("Сonnected to PostgreSQL")
+	if err := db.PingContext(ctx); err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	fmt.Println("Connected to PostgreSQL")
+	//окончание проверки
 
 	authHandler := NewAuthHandler(config, db)
-
 	router := mux.NewRouter()
 
 	router.HandleFunc("/register", authHandler.RegisterHandler).Methods("POST")

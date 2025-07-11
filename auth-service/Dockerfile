@@ -5,7 +5,7 @@ COPY go.mod go.sum .env ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o auth-service
+RUN GOOS=linux go build -o auth-service
 
 FROM alpine:latest
 WORKDIR /app

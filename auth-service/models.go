@@ -12,7 +12,17 @@ type AuthRequest struct {
 	Password string `json:"password"`
 }
 
+type RegisterRequest AuthRequest
+
 type AuthResponse struct {
+	Token string `json:"token"`
+}
+
+type RegisterResponse AuthResponse
+
+type UpdateResponse AuthResponse
+
+type ValidateRequest struct {
 	Token string `json:"token"`
 }
 
