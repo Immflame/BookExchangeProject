@@ -20,8 +20,8 @@ func NewAuthHandler(config Config, db *sql.DB) *AuthHandler {
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -34,8 +34,8 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	//проверяем существует ли пользователь в бд
 	query := `SELECT COUNT(*) FROM users WHERE username = $1`
 	var n int = 0
-	err = h.DB.QueryRow(query, req.Username).Scan(&n)
-	if err != nil {
+
+	if err := h.DB.QueryRow(query, req.Username).Scan(&n); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
@@ -47,6 +47,10 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// окончание проверки
 
 	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		return
+	}
 
 	var userID int64
 	query = `
@@ -55,8 +59,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
     RETURNING id
     `
 
-	err = h.DB.QueryRow(query, req.Username, hashedPassword).Scan(&userID)
-	if err != nil {
+	if err = h.DB.QueryRow(query, req.Username, hashedPassword).Scan(&userID); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
@@ -66,7 +69,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
-
+	/// изменить ниже
 	resp := RegisterResponse{Token: token}
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
@@ -78,8 +81,8 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req AuthRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -90,8 +93,8 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
     FROM users
     WHERE username = $1
     `
-	err = h.DB.QueryRow(query, req.Username).Scan(&user.ID, &user.Username, &user.Password, &user.Role)
-	if err != nil {
+
+	if err := h.DB.QueryRow(query, req.Username).Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
@@ -100,9 +103,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		if err == bcrypt.ErrMismatchedHashAndPassword {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
@@ -126,20 +127,13 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) ValidateHandler(w http.ResponseWriter, r *http.Request) {
-
-	var req ValidateRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	token, err := ExtractToken(r)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	if req.Token == "" {
-		http.Error(w, "Missing token", http.StatusUnauthorized)
-		return
-	}
-
-	userID, username, role, err := VerifyToken(req.Token, h.Config.SecretKey)
+	userID, username, role, err := VerifyToken(token, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
@@ -152,46 +146,49 @@ func (h *AuthHandler) ValidateHandler(w http.ResponseWriter, r *http.Request) {
 		Valid:    true,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-		return
-	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
-	var req UpdateRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	token, err := ExtractToken(r)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	userID, _, role, err := VerifyToken(token, h.Config.SecretKey)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if !IsValidCredentials(req.Username, req.Password) {
-		http.Error(w, "Invalid sername or password", http.StatusBadRequest)
+		http.Error(w, "Invalid username or password", http.StatusBadRequest)
 		return
 	}
 
 	//проверяем существует ли пользователь c таким же username в бд
-	query := `SELECT COUNT(*) FROM users WHERE username = $1`
-	var n int = 0
-	err = h.DB.QueryRow(query, req.Username).Scan(&n)
+	query := `SELECT COUNT(*) FROM users WHERE username = $1 AND id != $2`
+	var count int
+
+	err = h.DB.QueryRow(query, req.Username, userID).Scan(&count)
 	if err != nil {
-		http.Error(w, "Failed to register user", http.StatusInternalServerError)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-
-	if n != 0 {
+	if count > 0 {
 		http.Error(w, "A user with this username already exists", http.StatusConflict)
 		return
 	}
 	// окончание проверки
-
-	userID, _, role, err := VerifyToken(req.Token, h.Config.SecretKey)
-	if err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
 
 	hashedPassword, err := HashPassword(req.Password)
 	if err != nil {

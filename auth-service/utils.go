@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -10,8 +10,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func ExtractToken(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("missing Authorization header")
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return "", fmt.Errorf("invalid Authorization header format")
+	}
+
+	return parts[1], nil
+}
+
 func IsValidCredentials(username string, password string) bool {
-	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" || strings.Contains(username, " ") || strings.Contains(password, " ") {
+	if username == "" || password == "" ||
+		strings.Contains(username, " ") || strings.Contains(password, " ") ||
+		len(username) < 4 || len(password) < 4 {
 		return false
 	}
 
@@ -23,8 +39,9 @@ func GenerateToken(userID int, username string, role string, secretKey string) (
 		"user_id":  userID,
 		"username": username,
 		"role":     role,
-		"exp":      time.Now().Add(time.Minute * 5).Unix(), // время жизни 5 минут
+		"exp":      time.Now().Add(time.Minute * 15).Unix(), // время жизни 5 минут
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte(secretKey))
@@ -52,12 +69,10 @@ func VerifyToken(tokenString string, secretKey string) (int, string, string, err
 	})
 
 	if err != nil {
-		log.Printf("VerifyToken: Error parsing token: %v", err)
 		return 0, "", "", err
 	}
 
 	if !token.Valid {
-		log.Printf("VerifyToken: Token is not valid")
 		return 0, "", "", fmt.Errorf("invalid token")
 	}
 

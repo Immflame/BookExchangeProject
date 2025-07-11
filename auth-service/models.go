@@ -14,6 +14,8 @@ type AuthRequest struct {
 
 type RegisterRequest AuthRequest
 
+type UpdateRequest AuthRequest
+
 type AuthResponse struct {
 	Token string `json:"token"`
 }
@@ -22,19 +24,9 @@ type RegisterResponse AuthResponse
 
 type UpdateResponse AuthResponse
 
-type ValidateRequest struct {
-	Token string `json:"token"`
-}
-
 type ValidateResponse struct {
 	UserID   int    `json:"user_id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
 	Valid    bool   `json:"valid"`
-}
-
-type UpdateRequest struct {
-	Token    string `json:"token"`
-	Username string `json:"username"`
-	Password string `json:"password"`
 }

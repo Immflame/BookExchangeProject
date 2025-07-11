@@ -39,8 +39,8 @@ func main() {
 
 	router.HandleFunc("/register", authHandler.RegisterHandler).Methods("POST")
 	router.HandleFunc("/login", authHandler.LoginHandler).Methods("POST")
-	router.HandleFunc("/validate", authHandler.ValidateHandler).Methods("POST")
-	router.HandleFunc("/update", authHandler.UpdateHandler).Methods("POST")
+	router.HandleFunc("/validate", authHandler.ValidateHandler).Methods("GET")
+	router.HandleFunc("/update", authHandler.UpdateHandler).Methods("PUT")
 
 	serverAddress := ":" + config.Port
 	fmt.Printf("Auth service listening on %s\n", serverAddress)
