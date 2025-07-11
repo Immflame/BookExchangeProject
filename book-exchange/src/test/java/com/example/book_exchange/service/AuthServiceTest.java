@@ -27,7 +27,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     private final String testToken = "valid.token.123";
-    private final String authUrl = "http://auth-service:8081";
+    private final String authUrl = "http://localhost:8081";
 
     @BeforeEach
     void setup() {

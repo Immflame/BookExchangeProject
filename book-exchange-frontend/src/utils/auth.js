@@ -44,12 +44,3 @@ export const isAuthenticated = () => {
   return !!getToken();
 };
 
-export const logout = () => {
-  localStorage.removeItem('token');
-  window.dispatchEvent(authEvent);
-};
-
-export const getAuthHeader = () => {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
