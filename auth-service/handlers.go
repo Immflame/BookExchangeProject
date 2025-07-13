@@ -26,14 +26,19 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !IsValidCredentials(req.Username, req.Password) {
-		http.Error(w, "Invalid username or password", http.StatusBadRequest)
+	if !IsValid(req.Username) {
+		http.Error(w, "Invalid username", http.StatusBadRequest)
+		return
+	}
+
+	if !IsValid(req.Password) {
+		http.Error(w, "Invalid password", http.StatusBadRequest)
 		return
 	}
 
 	//проверяем существует ли пользователь в бд
 	query := `SELECT COUNT(*) FROM users WHERE username = $1`
-	var n int = 0
+	var n int
 
 	if err := h.DB.QueryRow(query, req.Username).Scan(&n); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
@@ -52,7 +57,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID int64
+	var userID int
 	query = `
     INSERT INTO users (username, password, role)
     VALUES ($1, $2, 'user')
@@ -64,7 +69,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := GenerateToken(int(userID), req.Username, "user", h.Config.SecretKey)
+	token, err := GenerateToken(userID, req.Username, "user", h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -157,7 +162,7 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _, role, err := VerifyToken(token, h.Config.SecretKey)
+	userID, username, role, err := VerifyToken(token, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
@@ -170,44 +175,59 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !IsValidCredentials(req.Username, req.Password) {
-		http.Error(w, "Invalid username or password", http.StatusBadRequest)
-		return
+	if req.Username != "" {
+		if !IsValid(req.Username) {
+			http.Error(w, "Invalid username", http.StatusBadRequest)
+		}
+
+		query := `SELECT COUNT(*) FROM users WHERE username = $1`
+		var n int
+
+		if err := h.DB.QueryRow(query, req.Username).Scan(&n); err != nil {
+			http.Error(w, "Failed to register user", http.StatusInternalServerError)
+			return
+		}
+
+		if n != 0 {
+			http.Error(w, "A user with this username already exists", http.StatusConflict)
+			return
+		}
+
+		query = `UPDATE users
+    	SET username = $1 
+    	WHERE id = $2`
+
+		_, err := h.DB.Exec(query, req.Username, userID)
+
+		if err != nil {
+			http.Error(w, "Failed update username", http.StatusInternalServerError)
+		}
+
+		username = req.Username
 	}
 
-	//проверяем существует ли пользователь c таким же username в бд
-	query := `SELECT COUNT(*) FROM users WHERE username = $1 AND id != $2`
-	var count int
+	if req.Password != "" {
+		if !IsValid(req.Password) {
+			http.Error(w, "Invalid password", http.StatusBadRequest)
+		}
 
-	err = h.DB.QueryRow(query, req.Username, userID).Scan(&count)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	if count > 0 {
-		http.Error(w, "A user with this username already exists", http.StatusConflict)
-		return
-	}
-	// окончание проверки
+		query := `UPDATE users
+    	SET password = $1 
+    	WHERE id = $2`
 
-	hashedPassword, err := HashPassword(req.Password)
-	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
-		return
-	}
+		hashedPassword, err := HashPassword(req.Password)
+		if err != nil {
+			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		}
 
-	query = `
-    UPDATE users 
-    SET username = $1, password = $2 
-    WHERE id = $3
-    `
-	_, err = h.DB.Exec(query, req.Username, hashedPassword, userID)
-	if err != nil {
-		http.Error(w, "Failed to update user", http.StatusInternalServerError)
-		return
+		_, err = h.DB.Exec(query, hashedPassword, userID)
+
+		if err != nil {
+			http.Error(w, "Failed update password", http.StatusInternalServerError)
+		}
 	}
 
-	newToken, err := GenerateToken(userID, req.Username, role, h.Config.SecretKey)
+	newToken, err := GenerateToken(userID, username, role, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return

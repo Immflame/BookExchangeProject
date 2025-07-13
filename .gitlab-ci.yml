@@ -1,14 +1,6 @@
 stages:
   - test
-<<<<<<< HEAD
 test_job:
   stage: test
   script:
     - echo "Hello, CI!"
-=======
-
-test_job:
-  stage: test
-  script:
-    - echo "Hello, CI!"
->>>>>>> 3c7f626c73027632035755de297716b14c4f6a3d

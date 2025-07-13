@@ -24,14 +24,16 @@ func ExtractToken(r *http.Request) (string, error) {
 	return parts[1], nil
 }
 
-func IsValidCredentials(username string, password string) bool {
-	if username == "" || password == "" ||
-		strings.Contains(username, " ") || strings.Contains(password, " ") ||
-		len(username) < 4 || len(password) < 4 {
-		return false
-	}
+func IsValid(s string) bool {
+	return !(s == "" || strings.Contains(s, " ") || len(s) < 4)
+}
 
-	return true
+func HashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
 }
 
 func GenerateToken(userID int, username string, role string, secretKey string) (string, error) {
@@ -39,7 +41,7 @@ func GenerateToken(userID int, username string, role string, secretKey string) (
 		"user_id":  userID,
 		"username": username,
 		"role":     role,
-		"exp":      time.Now().Add(time.Minute * 15).Unix(), // время жизни 5 минут
+		"exp":      time.Now().Add(time.Minute * 15).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -50,14 +52,6 @@ func GenerateToken(userID int, username string, role string, secretKey string) (
 	}
 
 	return tokenString, nil
-}
-
-func HashPassword(password string) (string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedPassword), nil
 }
 
 func VerifyToken(tokenString string, secretKey string) (int, string, string, error) {
