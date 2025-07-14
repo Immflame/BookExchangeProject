@@ -30,16 +30,14 @@ const AddBookForm = ({ locations }) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
       const bookData = {
-        token,
         title: formData.title,
         author: formData.author,
         description: formData.description,

@@ -16,12 +16,10 @@ export const updateReview = (id, reviewData) => {
   return api.patch(`/reviews/${id}`, reviewData);
 };
 
-export const deleteReview = (id, token) => {
-  return api.delete(`/reviews/${id}`, {
-    data: { token }
-  });
+export const deleteReview = (id) => {
+  return api.delete(`/reviews/${id}`);
 };
 
-export const getAllReviews = (token) => {
-  return api.get(`/reviews/getAllReviews/${token}`);
+export const getAllReviews = () => {
+  return api.get('/reviews/getAllReviews');
 };

@@ -10,9 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UserUpdateRequestDto {
     @NotBlank
-    private String token;
-
-    @NotBlank
     private String username;
 
     private String password;

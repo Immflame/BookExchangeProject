@@ -1,13 +1,12 @@
 package com.example.book_exchange.dto;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import lombok.Data;
 
 @Data
 public class ReviewUpdateDto {
-    @NotBlank(message = "Token is required")
-    private String token;
-
     @NotNull(message = "Rating is required")
     @Min(value = 1, message = "Rating must be at least 1")
     @Max(value = 5, message = "Rating must be at most 5")

@@ -6,7 +6,7 @@ import com.example.book_exchange.exception.PermissionDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -35,20 +35,38 @@ public class AuthService {
 
     public UserInfo validateToken(String token) {
         String url = authServiceBaseUrl + "/validate";
-        ResponseEntity<UserInfo> response = restTemplate.postForEntity(
-                url,
-                new TokenRequest(token),
-                UserInfo.class
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<?> entity = new HttpEntity<>(headers);
+        
+        ResponseEntity<UserInfo> response = restTemplate.exchange(
+            url, 
+            HttpMethod.GET, 
+            entity, 
+            UserInfo.class
         );
+        
         if (response.getBody() == null || !response.getBody().isValid()) {
             throw new InvalidTokenException("Invalid token");
         }
         return response.getBody();
     }
 
-    public TokenDto updateUser(UserUpdateRequestDto request) {
+    public TokenDto updateUser(String token, UserUpdateRequestDto request) {
         String url = authServiceBaseUrl + "/update";
-        ResponseEntity<TokenDto> response = restTemplate.postForEntity(url, request, TokenDto.class);
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<UserUpdateRequestDto> entity = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<TokenDto> response = restTemplate.exchange(
+            url, 
+            HttpMethod.PUT, 
+            entity, 
+            TokenDto.class
+        );
+        
         validateAuthResponse(response);
         return response.getBody();
     }
@@ -68,6 +86,4 @@ public class AuthService {
             throw new RuntimeException("Auth service request failed");
         }
     }
-
-    private record TokenRequest(String token) {}
 }

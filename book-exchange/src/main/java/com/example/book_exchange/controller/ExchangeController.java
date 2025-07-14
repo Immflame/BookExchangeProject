@@ -32,10 +32,18 @@ public class ExchangeController {
     @Autowired private UserService userService;
     @Autowired private AuthService authService;
 
-    @Operation(summary = "Get all exchanges (only for admin)")
-    @GetMapping("/get_all_exchanges/{token}")
-    public ResponseEntity<List<ExchangeResponseDto>> getAllExchanges(@PathVariable("token") String token) {
+    private String extractToken(String header) {
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        throw new InvalidTokenException("Invalid authorization header");
+    }
 
+    @Operation(summary = "Get all exchanges (only for admin)")
+    @GetMapping("/get_all_exchanges")
+    public ResponseEntity<List<ExchangeResponseDto>> getAllExchanges(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
         authService.validateAdminToken(token);
         return ResponseEntity.ok(exchangeService.getAllExchanges().stream()
                 .map(this::convertToDto)
@@ -43,8 +51,10 @@ public class ExchangeController {
     }
 
     @Operation(summary = "Get list of my exchanges")
-    @GetMapping("/my_exchanges/{token}")
-    public ResponseEntity<List<ExchangeResponseDto>> getMyExchanges(@PathVariable("token") String token) {
+    @GetMapping("/my_exchanges")
+    public ResponseEntity<List<ExchangeResponseDto>> getMyExchanges(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
         UserInfo userInfo = authService.validateToken(token);
         List<Exchange> exchanges = exchangeService.getExchangesByUserId(userInfo.getUserId());
         return ResponseEntity.ok(
@@ -65,8 +75,11 @@ public class ExchangeController {
 
     @Operation(summary = "Create new exchange")
     @PostMapping
-    public ResponseEntity<Exchange> createExchange(@Valid @RequestBody ExchangeRequestDto dto) {
-        UserInfo userInfo = authService.validateToken(dto.getToken());
+    public ResponseEntity<Exchange> createExchange(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody ExchangeRequestDto dto) {
+        String token = extractToken(authHeader);
+        UserInfo userInfo = authService.validateToken(token);
         User currentUser = userService.getUserById(userInfo.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userInfo.getUserId()));
         return ResponseEntity.status(201)
@@ -76,12 +89,12 @@ public class ExchangeController {
     @Operation(summary = "Update exchange status")
     @PatchMapping("/{id}")
     public ResponseEntity<ExchangeResponseDto> updateExchangeStatus(
+            @RequestHeader("Authorization") String authHeader,
             @PathVariable Long id,
-            @Valid @RequestBody TokenDto tokenDto,
             @RequestParam(value = "status", required = false) ExchangeStatus exchangeStatus
     ) {
-
-        UserInfo userInfo = authService.validateToken(tokenDto.getToken());
+        String token = extractToken(authHeader);
+        UserInfo userInfo = authService.validateToken(token);
         Exchange exchange = exchangeService.getExchangeById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Exchange not found"));
 

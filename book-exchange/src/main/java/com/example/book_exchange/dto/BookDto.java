@@ -6,9 +6,6 @@ import lombok.Data;
 
 @Data
 public class BookDto {
-    @NotBlank(message = "Token is required")
-    private String token;
-
     @NotBlank(message = "Title is required")
     private String title;
 

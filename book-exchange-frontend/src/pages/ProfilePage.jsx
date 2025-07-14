@@ -125,10 +125,8 @@ const ProfilePage = () => {
     e.preventDefault();
     setError('');
     setSuccess(false);
-
     try {
       const response = await updateUser({
-        token,
         username: formData.username,
         password: formData.password
       });
@@ -159,7 +157,7 @@ const ProfilePage = () => {
 
   const handleDeleteAccount = async () => {
     try {
-      await deleteUser({ token });
+      await deleteUser();
       localStorage.removeItem('token');
       navigate('/auth');
     } catch (err) {
@@ -182,7 +180,7 @@ const ProfilePage = () => {
   const handleDeleteBook = async () => {
     if (!selectedBook) return;
     try {
-      await deleteBook(selectedBook.id, token);
+      await deleteBook(selectedBook.id);
       setUserBooks(userBooks.filter(b => b.id !== selectedBook.id));
       handleCloseBookDialog();
     } catch (err) {
@@ -219,13 +217,13 @@ const ProfilePage = () => {
 
     try {
       const data = {
-        token,
         title: editBookData.title.trim(),
         author: editBookData.author.trim(),
         description: editBookData.description.trim(),
         genre: editBookData.genre,
         locationId: Number(editBookData.locationId)
       };
+      
       const response = await updateBook(selectedBook.id, data);
       setUserBooks(userBooks.map(b => (b.id === selectedBook.id ? response.data : b)));
       setSelectedBook(response.data);

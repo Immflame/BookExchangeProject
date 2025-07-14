@@ -32,32 +32,11 @@ const BookDetailsDialog = ({ open, book, onClose }) => {
 
   useEffect(() => {
     const fetchUserBooks = async () => {
-      if (open && book) {
-        try {
-          setLoading(true);
-          setError('');
-          const token = getToken();
-          const response = await getUserBooks(token);
-          setUserBooks(response.data.filter(b => b.status === 'AVAILABLE'));
-        } catch (err) {
-          console.error('Ошибка загрузки книг пользователя:', err);
-          setError('Не удалось загрузить ваши книги');
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    
-    fetchUserBooks();
-  }, [open, book]);
-
-  const fetchUserBooks = async () => {
     try {
       setLoading(true);
       setError('');
-      const token = localStorage.getItem('token');
-      const response = await getUserBooks(token);
-      setUserBooks(response.data);
+      const response = await getUserBooks();
+      setUserBooks(response.data.filter(b => b.status === 'AVAILABLE'));
     } catch (err) {
       console.error('Ошибка загрузки книг пользователя:', err);
       setError('Не удалось загрузить ваши книги');
@@ -65,21 +44,22 @@ const BookDetailsDialog = ({ open, book, onClose }) => {
       setLoading(false);
     }
   };
+    
+    fetchUserBooks();
+  }, [open, book]);
 
   const handleBookSelect = (event) => {
     setSelectedBookId(event.target.value);
   };
 
-  const handleProposeExchange = async () => {
+    const handleProposeExchange = async () => {
     if (!selectedBookId) return;
 
     try {
       setLoading(true);
       setError('');
-      const token = localStorage.getItem('token');
       
       await createExchange({
-        token,
         book1Id: selectedBookId,
         book2Id: book.id
       });

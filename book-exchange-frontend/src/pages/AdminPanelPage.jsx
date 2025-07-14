@@ -179,10 +179,10 @@ const AdminPanelPage = () => {
     }
     try {
       const data = {
-        token,
         name: editLocationData.name.trim(),
         description: editLocationData.description.trim()
       };
+      
       const response = await updateLocation(selectedLocation.id, data);
       setLocations(locations.map(loc =>
         loc.id === selectedLocation.id ? response.data : loc
@@ -195,6 +195,7 @@ const AdminPanelPage = () => {
       alert(err.response?.data?.message || 'Ошибка обновления локации');
     }
   };
+
   const handleOpenCreateDialog = () => {
     setCreateLocationData({ name: '', description: '' });
     setCreateError('');
@@ -219,10 +220,10 @@ const AdminPanelPage = () => {
     setCreateError('');
     try {
       const data = {
-        token,
         name: createLocationData.name.trim(),
         description: createLocationData.description.trim()
       };
+      
       const response = await createLocation(data);
       setLocations(prev => [...prev, response.data]);
       setCreateDialogOpen(false);

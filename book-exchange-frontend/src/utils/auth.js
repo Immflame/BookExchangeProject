@@ -23,6 +23,11 @@ export const getToken = () => {
   return localStorage.getItem('token');
 };
 
+export const getAuthHeader = () => {
+  const token = getToken();
+  return token ? `Bearer ${token}` : '';
+};
+
 export const getUserInfo = () => {
   const token = getToken();
   if (!token) return null;
@@ -44,3 +49,7 @@ export const isAuthenticated = () => {
   return !!getToken();
 };
 
+export const logout = () => {
+  localStorage.removeItem('token');
+  window.dispatchEvent(authEvent);
+};

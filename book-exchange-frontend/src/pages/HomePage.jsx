@@ -74,7 +74,7 @@ useEffect(() => {
   fetchData();
 }, [appliedFilters, userInfo?.userId]);
 
-  useEffect(() => {
+    useEffect(() => {
     const fetchUserBooks = async () => {
       if (bookDialogOpen && selectedBook) {
         try {
@@ -82,8 +82,8 @@ useEffect(() => {
           setExchangeError('');
           setExchangeSuccess(false);
           
-          const token = localStorage.getItem('token');
-          const response = await getUserBooks(token);
+          // Убран параметр token
+          const response = await getUserBooks();
           setUserBooks(response.data);
         } catch (err) {
           console.error('Ошибка загрузки книг пользователя:', err);
@@ -129,9 +129,7 @@ useEffect(() => {
       setExchangeLoading(true);
       setExchangeError('');
       
-      const token = localStorage.getItem('token');
       await createExchange({
-        token,
         book1Id: selectedUserBook,
         book2Id: selectedBook.id
       });

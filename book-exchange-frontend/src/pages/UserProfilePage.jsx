@@ -140,9 +140,7 @@ const UserProfilePage = () => {
     setReviewError('');
 
     try {
-      const token = getToken();
       await createReview({
-        token,
         rating: reviewRating,
         comment: reviewComment,
         revieweeId: userData.id

@@ -27,9 +27,18 @@ public class ReviewController {
     private final UserService userService;
     private final AuthService authService;
 
+    private String extractToken(String header) {
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        throw new InvalidTokenException("Invalid authorization header");
+    }
+
     @Operation(summary = "Get all reviews (only for admin)")
-    @GetMapping("/getAllReviews/{token}")
-    public ResponseEntity<List<ReviewResponseDto>> getAllReviews(@PathVariable String token) {
+    @GetMapping("/getAllReviews")
+    public ResponseEntity<List<ReviewResponseDto>> getAllReviews(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
         authService.validateAdminToken(token);
         return ResponseEntity.ok(reviewService.getAllReviews().stream()
                 .map(this::convertToDto)
@@ -48,8 +57,11 @@ public class ReviewController {
 
     @Operation(summary = "Create new review")
     @PostMapping
-    public ResponseEntity<ReviewResponseDto> createReview(@Valid @RequestBody ReviewCreateDto dto) {
-        User reviewer = validateReviewer(dto.getToken());
+    public ResponseEntity<ReviewResponseDto> createReview(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody ReviewCreateDto dto) {
+        String token = extractToken(authHeader);
+        User reviewer = validateReviewer(token);
         User reviewee = userService.getUserById(dto.getRevieweeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Reviewee not found"));
 
@@ -65,13 +77,14 @@ public class ReviewController {
     @Operation(summary = "Update review")
     @PatchMapping("/{id}")
     public ResponseEntity<ReviewResponseDto> updateReview(
+            @RequestHeader("Authorization") String authHeader,
             @PathVariable Long id,
             @Valid @RequestBody ReviewUpdateDto dto) {
-
+        String token = extractToken(authHeader);
         Review existingReview = reviewService.getReviewById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
 
-        User reviewer = validateReviewPermissions(id, dto.getToken());
+        User reviewer = validateReviewPermissions(id, token);
 
         Review updatedReview = Review.builder()
                 .id(id)
@@ -90,10 +103,10 @@ public class ReviewController {
     @Operation(summary = "Delete review by review_id")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteReview(
-            @PathVariable Long id,
-            @Valid @RequestBody TokenDto tokenDto) {
-
-        validateReviewPermissions(id, tokenDto.getToken());
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id) {
+        String token = extractToken(authHeader);
+        validateReviewPermissions(id, token);
         reviewService.deleteReview(id);
         return ResponseEntity.noContent().build();
     }

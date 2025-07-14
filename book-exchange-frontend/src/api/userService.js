@@ -9,17 +9,15 @@ export const login = (credentials) => {
 };
 
 export const getCurrentUser = () => {
-  return api.post('/users/me', { token: localStorage.getItem('token') });
+  return api.post('/users/me');
 };
 
 export const updateUser = (data) => {
-  return api.put('/users/', data);
+  return api.put('/users', data);
 };
 
-export const deleteUser = (data) => {
-  return api.delete('/users/', { 
-    data: { token: data.token } 
-  });
+export const deleteUser = () => {
+  return api.delete('/users');
 };
 
 export const getUserById = (id) => {

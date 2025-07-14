@@ -68,12 +68,15 @@ const MyExchangesPage = () => {
     setActionError('');
 
     try {
-      const response = await updateExchangeStatus(selectedExchange.id, status, token);
+      const response = await updateExchangeStatus(selectedExchange.id, status);
+      
       const updatedExchangeFromServer = response.data;
       console.log('Ответ сервера при обновлении статуса:', response.data);
+      
       const updatedExchanges = exchanges.map(ex =>
         ex.id === selectedExchange.id ? updatedExchangeFromServer : ex
       );
+      
       setExchanges(updatedExchanges);
       handleCloseDialog();
     } catch (err) {

@@ -2,7 +2,6 @@ package com.example.book_exchange.controller;
 
 import com.example.book_exchange.dto.LocationRequestDto;
 import com.example.book_exchange.dto.LocationResponseDto;
-import com.example.book_exchange.dto.TokenDto;
 import com.example.book_exchange.exception.*;
 import com.example.book_exchange.model.Location;
 import com.example.book_exchange.service.LocationService;
@@ -25,6 +24,13 @@ public class LocationController {
     @Autowired private LocationService locationService;
     @Autowired private AuthService authService;
 
+    private String extractToken(String header) {
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        throw new InvalidTokenException("Invalid authorization header");
+    }
+
     @GetMapping
     public ResponseEntity<List<LocationResponseDto>> getAllLocations() {
         return ResponseEntity.ok(locationService.getAllLocations().stream()
@@ -45,8 +51,10 @@ public class LocationController {
     @Operation(summary = "Create new special location (only for admin)")
     @PostMapping
     public ResponseEntity<LocationResponseDto> createLocation(
+            @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody LocationRequestDto dto) {
-        authService.validateAdminToken(dto.getToken());
+        String token = extractToken(authHeader);
+        authService.validateAdminToken(token);
         return ResponseEntity.status(201)
                 .body(convertToDto(locationService.createLocation(dto)));
     }
@@ -54,10 +62,12 @@ public class LocationController {
     @Operation(summary = "Update special location (only for admin)")
     @PutMapping("/{id}")
     public ResponseEntity<LocationResponseDto> updateLocation(
+            @RequestHeader("Authorization") String authHeader,
             @PathVariable("id") Long id,
             @Valid @RequestBody LocationRequestDto dto) {
+        String token = extractToken(authHeader);
         ValidationUtils.validateId(id, "location");
-        authService.validateAdminToken(dto.getToken());
+        authService.validateAdminToken(token);
         return ResponseEntity.ok(
                 convertToDto(locationService.updateLocation(id, dto))
         );
@@ -66,10 +76,10 @@ public class LocationController {
     @Operation(summary = "Delete special location (only for admin)")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteLocation(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TokenDto tokenDto) {
-
-        authService.validateAdminToken(tokenDto.getToken());
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable("id") Long id) {
+        String token = extractToken(authHeader);
+        authService.validateAdminToken(token);
         locationService.deleteLocation(id);
         return ResponseEntity.noContent().build();
     }

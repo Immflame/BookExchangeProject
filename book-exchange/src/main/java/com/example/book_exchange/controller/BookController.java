@@ -35,6 +35,13 @@ public class BookController {
     @Autowired
     private AuthService authService;
 
+    private String extractToken(String header) {
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        throw new InvalidTokenException("Invalid authorization header");
+    }
+
     @Operation(summary = "Get list of all books (filtered by genre and location)")
     @GetMapping
     public ResponseEntity<List<BookResponseDto>> getAllBooks(
@@ -68,8 +75,10 @@ public class BookController {
     }
 
     @Operation(summary = "Get list of my books")
-    @GetMapping("/my_books/{token}")
-    public ResponseEntity<List<BookResponseDto>> getUserBooks(@PathVariable("token") String token){
+    @GetMapping("/my_books")
+    public ResponseEntity<List<BookResponseDto>> getUserBooks(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
         UserInfo userInfo = authService.validateToken(token);
         User user = userService.getUserById(userInfo.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userInfo.getUserId()));
@@ -83,8 +92,11 @@ public class BookController {
 
     @Operation(summary = "Create new book")
     @PostMapping
-    public ResponseEntity<Book> createBook(@Valid @RequestBody BookDto bookDto) {
-        UserInfo userInfo = authService.validateToken(bookDto.getToken());
+    public ResponseEntity<Book> createBook(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody BookDto bookDto) {
+        String token = extractToken(authHeader);
+        UserInfo userInfo = authService.validateToken(token);
         User user = userService.getUserById(userInfo.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userInfo.getUserId()));
 
@@ -95,11 +107,13 @@ public class BookController {
     @Operation(summary = "Update book info")
     @PutMapping("/{id}")
     public ResponseEntity<Book> updateBook(
+            @RequestHeader("Authorization") String authHeader,
             @PathVariable("id") Long id,
             @Valid @RequestBody BookDto bookDto
     ) {
+        String token = extractToken(authHeader);
         ValidationUtils.validateId(id, "book");
-        UserInfo userInfo = authService.validateToken(bookDto.getToken());
+        UserInfo userInfo = authService.validateToken(token);
         User user = userService.getUserById(userInfo.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userInfo.getUserId()));
 
@@ -117,10 +131,10 @@ public class BookController {
     @Operation(summary = "Delete book by id")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteBook(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody TokenDto tokenDto) {
-
-        UserInfo userInfo = authService.validateToken(tokenDto.getToken());
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable("id") Long id) {
+        String token = extractToken(authHeader);
+        UserInfo userInfo = authService.validateToken(token);
         Book book = bookService.getBookById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found"));
 

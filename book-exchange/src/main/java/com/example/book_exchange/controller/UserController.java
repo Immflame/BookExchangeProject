@@ -24,6 +24,13 @@ public class UserController {
     private final UserService userService;
     private final AuthService authService;
 
+    private String extractToken(String header) {
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        throw new InvalidTokenException("Invalid authorization header");
+    }
+
     @Operation(summary = "Get all users")
     @GetMapping
     public ResponseEntity<List<UserResponseDto>> getAllUsers() {
@@ -53,8 +60,10 @@ public class UserController {
 
     @Operation(summary = "Get info about me")
     @PostMapping("/me")
-    public ResponseEntity<UserResponseDto> getCurrentUser(@Valid @RequestBody TokenDto tokenDto) {
-        return ResponseEntity.ok(convertToDto(validateUser(tokenDto.getToken())));
+    public ResponseEntity<UserResponseDto> getCurrentUser(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
+        return ResponseEntity.ok(convertToDto(validateUser(token)));
     }
 
     @Operation(summary = "Register")
@@ -70,17 +79,23 @@ public class UserController {
     }
 
     @Operation(summary = "Update username or password")
-    @PutMapping("/")
-    public ResponseEntity<TokenDto> updateUser(@Valid @RequestBody UserUpdateRequestDto request) {
-        return ResponseEntity.ok(authService.updateUser(request));
+    @PutMapping
+    public ResponseEntity<TokenDto> updateUser(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody UserUpdateRequestDto request) {
+        String token = extractToken(authHeader);
+        return ResponseEntity.ok(authService.updateUser(token, request));
     }
 
     @Operation(summary = "Delete user")
-    @DeleteMapping("/")
-    public ResponseEntity<Void> deleteUser(@Valid @RequestBody TokenDto tokenDto) {
+    @DeleteMapping
+    public ResponseEntity<Void> deleteUser(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
+        User user = validateUser(token);
 
-        User user = validateUser(tokenDto.getToken());
         userService.deleteUser(user.getId());
+
         return ResponseEntity.noContent().build();
     }
 
