@@ -25,7 +25,7 @@ func ExtractToken(r *http.Request) (string, error) {
 }
 
 func IsValid(s string) bool {
-	return !(s == "" || strings.Contains(s, " ") || len(s) < 4)
+	return !(strings.Contains(s, " ") || len(s) < 4)
 }
 
 func HashPassword(password string) (string, error) {

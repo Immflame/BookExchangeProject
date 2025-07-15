@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -18,6 +20,8 @@ func NewAuthHandler(config Config, db *sql.DB) *AuthHandler {
 }
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	var req RegisterRequest
 
@@ -36,12 +40,12 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//проверяем существует ли пользователь в бд
+	// проверяем существует ли пользователь в бд
 	query := `SELECT COUNT(*) FROM users WHERE username = $1`
 	var n int
 
-	if err := h.DB.QueryRow(query, req.Username).Scan(&n); err != nil {
-		http.Error(w, "Failed to register user", http.StatusInternalServerError)
+	if err := h.DB.QueryRowContext(ctx, query, req.Username).Scan(&n); err != nil {
+		http.Error(w, "Failed to check username existence", http.StatusInternalServerError)
 		return
 	}
 
@@ -64,7 +68,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
     RETURNING id
     `
 
-	if err = h.DB.QueryRow(query, req.Username, hashedPassword).Scan(&userID); err != nil {
+	if err = h.DB.QueryRowContext(ctx, query, req.Username, hashedPassword).Scan(&userID); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
@@ -78,12 +82,14 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	resp := RegisterResponse{Token: token}
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
 
 func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	var req AuthRequest
 
@@ -99,7 +105,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
     WHERE username = $1
     `
 
-	if err := h.DB.QueryRow(query, req.Username).Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
+	if err := h.DB.QueryRowContext(ctx, query, req.Username).Scan(&user.ID, &user.Username, &user.Password, &user.Role); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
@@ -126,35 +132,67 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	resp := AuthResponse{Token: token}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
 
 func (h *AuthHandler) ValidateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
 	token, err := ExtractToken(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	userID, username, role, err := VerifyToken(token, h.Config.SecretKey)
+	///достаем данные из токена
+	TuserID, Tusername, Trole, err := VerifyToken(token, h.Config.SecretKey)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
+	//достаем данные по id из бд
+	var username, role string
+
+	query := `
+    SELECT username, role
+    FROM users
+    WHERE id = $1
+    `
+
+	if err := h.DB.QueryRowContext(ctx, query, TuserID).Scan(&username, &role); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "Failed to retrieve user", http.StatusInternalServerError)
+		return
+	}
+
+	if username != Tusername || Trole != role {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
 	resp := ValidateResponse{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
+		UserID:   TuserID,
+		Username: Tusername,
+		Role:     Trole,
 		Valid:    true,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	token, err := ExtractToken(r)
 	if err != nil {
@@ -178,13 +216,14 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Username != "" {
 		if !IsValid(req.Username) {
 			http.Error(w, "Invalid username", http.StatusBadRequest)
+			return
 		}
 
 		query := `SELECT COUNT(*) FROM users WHERE username = $1`
 		var n int
 
-		if err := h.DB.QueryRow(query, req.Username).Scan(&n); err != nil {
-			http.Error(w, "Failed to register user", http.StatusInternalServerError)
+		if err := h.DB.QueryRowContext(ctx, query, req.Username).Scan(&n); err != nil {
+			http.Error(w, "Failed to check username existence", http.StatusInternalServerError)
 			return
 		}
 
@@ -197,10 +236,11 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
     	SET username = $1 
     	WHERE id = $2`
 
-		_, err := h.DB.Exec(query, req.Username, userID)
+		_, err := h.DB.ExecContext(ctx, query, req.Username, userID)
 
 		if err != nil {
-			http.Error(w, "Failed update username", http.StatusInternalServerError)
+			http.Error(w, "Failed to update username", http.StatusInternalServerError)
+			return
 		}
 
 		username = req.Username
@@ -209,6 +249,7 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Password != "" {
 		if !IsValid(req.Password) {
 			http.Error(w, "Invalid password", http.StatusBadRequest)
+			return
 		}
 
 		query := `UPDATE users
@@ -218,12 +259,14 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		hashedPassword, err := HashPassword(req.Password)
 		if err != nil {
 			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+			return
 		}
 
-		_, err = h.DB.Exec(query, hashedPassword, userID)
+		_, err = h.DB.ExecContext(ctx, query, hashedPassword, userID)
 
 		if err != nil {
-			http.Error(w, "Failed update password", http.StatusInternalServerError)
+			http.Error(w, "Failed to update password", http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -235,8 +278,8 @@ func (h *AuthHandler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := UpdateResponse{Token: newToken}
 	w.Header().Set("Content-Type", "application/json")
-	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
